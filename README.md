@@ -27,7 +27,7 @@ Arguments for the respective functions are the following:
 > **Note**  
 > Plans can be scheduled in advance by specifying a starting timestamp out in the future.
   
-Plans are identified by a ``bytes32`` key which is derived by [hashing its attributes]().  
+Plans are identified by a ``bytes32`` key which is derived by [hashing its attributes](https://github.com/gelatodigital/w3f-automated-bribing/blob/main/contracts/Briber/Briber.sol#L247-L251).  
 This implicitly prevents the creation of duplicate plans.
 
 ## Removing a bribe plan
