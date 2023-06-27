@@ -56,7 +56,7 @@ This does however allow plans with short intervals to starve others since iterat
 To remove bias, the Web3 Function first shuffles the array before iterating.
 
 ## Guarantees
-Whenever a new plan is added, the tokens it requires are allocated to it are kept track of in a mapping.
+Whenever a new plan is added the tokens it requires are allocated to it and are kept track of in a mapping.
 This ensures that multiple plans can coexist and execute in parallel without stealing tokens from one another.
 The contract prevents the creation of plans which have insufficient tokens to run until completion and prevents the withdrawal of tokens in use by existing plans.
 
