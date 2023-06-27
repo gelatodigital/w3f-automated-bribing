@@ -47,7 +47,7 @@ There are three ways for a plan to be removed:
   
 ## Executing a bribe
 The Web3 Function will periodically fetch all bribe plans from the contract.
-Once it finds a plan which is scheduled for execution, it translates its ``gauge address`` to a ``proposal hash`` by performing off-chain computation.
+Once it finds a plan scheduled for execution, it translates its ``gauge address`` to a ``proposal hash`` by performing off-chain computation.
 The translation is protocol specific and is defined in [gaugeToProposal](https://github.com/gelatodigital/w3f-automated-bribing/blob/main/web3-functions/bribe/gaugeToProposal.ts).
 Handlers are modular by design to allow for easy implementation/support of additional protocols.
 
