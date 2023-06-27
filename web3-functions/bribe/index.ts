@@ -42,8 +42,8 @@ Web3Function.onRun(async (context: Web3FunctionContext) => {
     if (gaugeToProposal[plan.hhBriber] === undefined) continue;
 
     const key = ethers.utils.solidityKeccak256(
-      ["address", "address", "address"],
-      [plan.hhBriber, plan.gauge, plan.token]
+      ["address", "address", "address", "uint256", "uint256"],
+      [plan.hhBriber, plan.gauge, plan.token, plan.amount, plan.interval]
     );
 
     const proposal = await gaugeToProposal[plan.hhBriber](plan.gauge);

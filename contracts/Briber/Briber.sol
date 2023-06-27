@@ -72,6 +72,7 @@ contract Briber is AutomateReady {
         emit Deposit(msg.value);
     }
 
+    // solhint-disable function-max-lines
     function addPlan(
         IBribe hhBriber,
         address gauge,
@@ -85,7 +86,7 @@ contract Briber is AutomateReady {
         uint256 totalAmount = amount * epochs;
 
         // ensures that sufficient tokens are present to execute the plan to completion
-        // this can be overriden with unsafe=true
+        // this can be overridden with unsafe=true
         require(
             unsafe || totalAmount <= _getAvailable(token),
             "Briber.addPlan: amount exceeds available"
@@ -243,9 +244,11 @@ contract Briber is AutomateReady {
         // solhint-disable not-rely-on-time
         if (start < block.timestamp) start = block.timestamp;
 
-        // deliberate key collision prevents plans with same protocol, gauge, token
-        // even if amount, interval, start, epochs differ
-        bytes32 key = keccak256(abi.encodePacked(hhBriber, gauge, token));
+        // derive unique identifier key
+        // can not use start or epochs since they are mutable
+        bytes32 key = keccak256(
+            abi.encodePacked(hhBriber, gauge, token, amount, interval)
+        );
 
         _plans.set(
             key,
@@ -323,7 +326,9 @@ contract Briber is AutomateReady {
 
     // get the contract balance excluding tokens allocated to existing plans
     function _getAvailable(IERC20 token) internal view returns (uint256) {
-        return token.balanceOf(address(this)) - allocated[token];
+        uint256 balance = token.balanceOf(address(this));
+
+        return balance > allocated[token] ? balance - allocated[token] : 0;
     }
 
     // get a plans allocated tokens based on its amount per epoch and remaining epochs
