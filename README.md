@@ -85,7 +85,7 @@ This behaviour can be overridden with ``unsafe=true`` in ``addPlan`` and ``withd
    ```
    yarn run hardhat deploy --network ethereum
    ```
-5. Deploy the W3f to IPFS and create a W3f task
+5. Deploy the W3F to IPFS and create a W3F task
    ```
    yarn run hardhat run scripts/w3f-deploy-and-create-task.ts --network ethereum
    ```
