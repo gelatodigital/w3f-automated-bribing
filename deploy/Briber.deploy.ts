@@ -9,8 +9,6 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const [deployer] = await ethers.getSigners();
   const { deploy } = deployments;
 
-  console.log(deployer.address);
-
   console.log(`Deploying ${name} to ${network.name}.`);
 
   const mapping = await deployments.get(lib);
