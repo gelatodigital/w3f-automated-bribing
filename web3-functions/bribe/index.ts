@@ -18,7 +18,14 @@ import {
  * To avoid this we first shuffle the array
  */
 
-const shuffled = (arr: any[]) => arr.sort(() => 0.5 - Math.random());
+const shuffled = <Type>(arr: Type[]): Type[] => {
+  const out = arr.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+};
 
 Web3Function.onRun(async (context: Web3FunctionContext) => {
   const { userArgs, multiChainProvider } = context;
