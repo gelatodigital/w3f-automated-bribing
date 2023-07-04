@@ -89,6 +89,10 @@ This behaviour can be overridden with ``unsafe=true`` in ``addPlan`` and ``withd
    ```
    yarn run hardhat run scripts/w3f-deploy-and-create-task.ts --network ethereum
    ```
+6. Verify contracts on Etherscan (Optional)
+   ```
+   yarn run hardhat etherscan-verify --network ethereum
+   ```
 6. Deposit ``ETH`` into ``Briber`` contract for fee payment
 
 ## Testing
