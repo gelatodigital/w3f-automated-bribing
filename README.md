@@ -2,6 +2,9 @@
 This project demonstrates automated bribing with configurable bribe plans stored on-chain.
 The plans are periodically executed with off-chain data by a Web3 Function when user-defined criteria are met.
 
+> **Warning**  
+> The documentation has not yet been updated to reflect the most recent release.
+
 ## Creating a bribe plan
 Plans can be added using either ``addPlan`` or ``addPlanAll``.
 The former bribes a fixed amount of tokens every epoch whereas the latter bribes all available tokens every epoch.
@@ -61,14 +64,18 @@ This ensures that multiple plans can coexist and execute in parallel without ste
 The contract prevents the creation of plans which have insufficient tokens to run until completion and prevents the withdrawal of tokens in use by existing plans.
 
 > **Note**  
-> ``addPlanAll`` is inherently safe as its plans bribe all remaining unallocated tokens
+> ``addPlanAll`` is inherently safe as its plans bribe all remaining unallocated tokens.
 
 This behaviour can be overridden with ``unsafe=true`` in ``addPlan`` and ``withdrawERC20``
 
 > **Warning**  
-> Using this override voids the guarantees outlined above and may lead to plan cancellation
+> Using this override voids the guarantees outlined above and may lead to plan cancellation.
 
 ## Deployment
+
+> **Warning**  
+> Contracts are not audited by a third-party. Please use at your own discretion.
+
 1. Install dependencies
    ```
    yarn install
