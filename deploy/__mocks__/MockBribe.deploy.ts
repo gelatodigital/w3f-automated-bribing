@@ -1,10 +1,10 @@
 import { HardhatRuntimeEnvironment } from "hardhat/types";
 import { DeployFunction } from "hardhat-deploy/types";
 
-const name = "Mapping";
+const name = "MockBribe";
 
 const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
-  const { deployments, ethers, network } = hre;
+  const { deployments, network, ethers } = hre;
   const [deployer] = await ethers.getSigners();
   const { deploy } = deployments;
 

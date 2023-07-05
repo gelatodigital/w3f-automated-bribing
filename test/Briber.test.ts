@@ -13,7 +13,8 @@ import {
 } from "@gelatonetwork/web3-functions-sdk";
 
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const BALANCER_BRIBE = "0x7Cdf753b45AB0729bcFe33DC12401E55d28308A9";
+const HH_BRIBER_ADDRESS = "0x7Cdf753b45AB0729bcFe33DC12401E55d28308A9"; // Balancer
+//const HH_BRIBER_ADDRESS = "0x642c59937A62cf7dc92F70Fd78A13cEe0aa2Bd9c"; // Aura
 const GEAR_TOKEN = "0xBa3335588D9403515223F109EdC4eB7269a9Ab5D";
 const BB_G_USD_GAUGE = "0x19A13793af96f534F0027b4b6a3eB699647368e7";
 
@@ -63,7 +64,7 @@ describe("Oracle1Balance", () => {
       .createTask(proxyAddress, "0xc0e8c0c2", moduleData, NATIVE_TOKEN);
 
     await setBalance(briberAddress, ethers.utils.parseEther("1"));
-    await setBalance(gearMultisigAddress, ethers.utils.parseEther("1"));
+    await setBalance(gearMultisigAddress, ethers.utils.parseEther("2"));
 
     userArgs = {
       contractAddress: briberAddress,
@@ -122,44 +123,46 @@ describe("Oracle1Balance", () => {
     );
   };
 
-  it("No bribes to execute", async () => {
+  it("No bribe plans", async () => {
     const exec = await bribeW3f.run({ userArgs });
     const res = exec.result as Web3FunctionResultV2;
 
     if (res.canExec) assert.fail("canExec: true");
-    else expect(res.message).to.equal("No bribes to execute");
+    else expect(res.message).to.equal("No bribe plans");
   });
 
-  it("Briber.addPlan: amount exceeds available", async () => {
+  it("Briber.createPlan: amount exceeds available", async () => {
     await expect(
-      briber.addPlan(
-        BALANCER_BRIBE,
+      briber.createPlan(
+        HH_BRIBER_ADDRESS,
         BB_G_USD_GAUGE,
         GEAR_TOKEN,
         ethers.utils.parseEther("100"),
         100,
         0,
         2,
+        false,
         false
       )
-    ).to.be.revertedWith("Briber.addPlan: amount exceeds available");
+    ).to.be.revertedWith("Briber.createPlan: amount exceeds available");
   });
 
-  it("Briber.addPlan: AddedPlan", async () => {
+  it("Briber.createPlan: CreatedPlan", async () => {
     await gear.transfer(briber.address, ethers.utils.parseEther("100000"));
 
     await expect(
-      briber.addPlan(
-        BALANCER_BRIBE,
+      briber.createPlan(
+        HH_BRIBER_ADDRESS,
         BB_G_USD_GAUGE,
         GEAR_TOKEN,
         ethers.utils.parseEther("100"),
         100,
         0,
         2,
+        false,
         false
       )
-    ).to.emit(briber, "AddedPlan");
+    ).to.emit(briber, "CreatedPlan");
   });
 
   it("Briber.execBribe: ExecutedBribe", async () => {
@@ -171,12 +174,12 @@ describe("Oracle1Balance", () => {
     await expect(execSyncFee(res.callData[0])).to.emit(briber, "ExecutedBribe");
   });
 
-  it("No bribes to execute", async () => {
+  it("No bribes executable", async () => {
     const exec = await bribeW3f.run({ userArgs });
     const res = exec.result as Web3FunctionResultV2;
 
     if (res.canExec) assert.fail("canExec: true");
-    else expect(res.message).to.equal("No bribes to execute");
+    else expect(res.message).to.equal("No bribes executable");
   });
 
   it("Briber.execBribe: PlanCompleted", async () => {
@@ -195,10 +198,18 @@ describe("Oracle1Balance", () => {
     expect(plans.length).to.equal(0);
   });
 
-  it("Briber.addPlanAll: AddedPlanAll", async () => {
+  it("Briber.createPlanAll: CreatedPlan", async () => {
     await expect(
-      briber.addPlanAll(BALANCER_BRIBE, BB_G_USD_GAUGE, GEAR_TOKEN, 100, 0, 2)
-    ).to.emit(briber, "AddedPlanAll");
+      briber.createPlanAll(
+        HH_BRIBER_ADDRESS,
+        BB_G_USD_GAUGE,
+        GEAR_TOKEN,
+        100,
+        0,
+        2,
+        true
+      )
+    ).to.emit(briber, "CreatedPlan");
   });
 
   it("Briber.execBribe: ExecutedBribe", async () => {
@@ -216,66 +227,86 @@ describe("Oracle1Balance", () => {
     await expect(balanceAfter).to.equal(0);
   });
 
-  it("Briber.addPlan: AddedPlan", async () => {
+  it("Briber.createPlan: CreatedPlan", async () => {
     await gear.transfer(briber.address, ethers.utils.parseEther("100000"));
 
     await expect(
-      briber.addPlan(
-        BALANCER_BRIBE,
+      briber.createPlan(
+        HH_BRIBER_ADDRESS,
         BB_G_USD_GAUGE,
         GEAR_TOKEN,
         ethers.utils.parseEther("50000"),
         100,
         0,
         2,
+        false,
         false
       )
-    ).to.emit(briber, "AddedPlan");
+    ).to.emit(briber, "CreatedPlan");
   });
 
-  it("Briber.addPlan: amount exceeds available", async () => {
+  it("Briber.createPlan: amount exceeds available", async () => {
     await expect(
-      briber.addPlan(
-        BALANCER_BRIBE,
+      briber.createPlan(
+        HH_BRIBER_ADDRESS,
         BB_G_USD_GAUGE,
         GEAR_TOKEN,
         ethers.utils.parseEther("1"),
         100,
         0,
         1,
+        false,
         false
       )
-    ).to.be.revertedWith("Briber.addPlan: amount exceeds available");
+    ).to.be.revertedWith("Briber.createPlan: amount exceeds available");
   });
 
   it("Briber.removePlan: RemovedPlan", async () => {
+    const plans = await briber.getPlans();
+    const plan = plans.find((x) => x.amount.toBigInt() !== 0n);
+
+    if (!plan) assert.fail("Plan not found");
+
     const key = ethers.utils.solidityKeccak256(
-      ["address", "address", "address", "uint256", "uint256"],
       [
-        BALANCER_BRIBE,
-        BB_G_USD_GAUGE,
-        GEAR_TOKEN,
-        ethers.utils.parseEther("50000"),
-        100,
+        "uint8",
+        "address",
+        "address",
+        "address",
+        "uint256",
+        "uint256",
+        "uint256",
+        "bool",
+      ],
+      [
+        plan.style,
+        plan.hhBriber,
+        plan.gauge,
+        plan.token,
+        plan.amount,
+        plan.interval,
+        plan.createdAt,
+        plan.canSkip,
       ]
     );
 
     await expect(briber.removePlan(key)).to.emit(briber, "RemovedPlan");
   });
 
-  it("Briber.addPlan: AddedPlan", async () => {
+  it("Briber.createPlan: CreatedPlan", async () => {
     await expect(
-      briber.addPlan(
-        BALANCER_BRIBE,
+      briber.createPlan(
+        HH_BRIBER_ADDRESS,
         BB_G_USD_GAUGE,
         GEAR_TOKEN,
         ethers.utils.parseEther("100000"),
         100,
         0,
         1,
+        false,
         false
       )
-    ).to.emit(briber, "AddedPlan");
+    ).to.emit(briber, "CreatedPlan");
   });
 
   it("Briber.execBribe: PlanCompleted", async () => {
@@ -292,12 +323,12 @@ describe("Oracle1Balance", () => {
     expect(balance).to.equal(0);
   });
 
-  it("No bribes to execute", async () => {
+  it("No bribes executable", async () => {
     const exec = await bribeW3f.run({ userArgs });
     const res = exec.result as Web3FunctionResultV2;
 
     if (res.canExec) assert.fail("canExec: true");
-    else expect(res.message).to.equal("No bribes to execute");
+    else expect(res.message).to.equal("No bribes executable");
   });
 
   it("Briber.execBribe: PlanCompleted", async () => {

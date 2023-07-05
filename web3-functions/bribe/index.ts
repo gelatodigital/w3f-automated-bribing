@@ -4,7 +4,7 @@ import { ethers } from "ethers";
 import verifyUserArgs from "./verifyUserArgs";
 import gaugeToProposal from "./gaugeToProposal";
 
-import briberAbi from "./abi/briber.json";
+import { abi } from "../../artifacts/contracts/Briber/Briber.sol/Briber.json";
 
 import {
   Web3Function,
@@ -14,59 +14,65 @@ import {
 /**
  * One plan is executed per run
  * This prevents the task from exceeding request limits
- * This however allows plans to starve each other
- * To avoid this we first shuffle the array
+ * Two plans with one minute intervals can starve others
+ * This can be avoided by randomising the executable plans
+ * The tradeoff is no strict sequential ordering
  */
-
-const shuffled = <Type>(arr: Type[]): Type[] => {
-  const out = arr.slice();
-  for (let i = out.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-};
 
 Web3Function.onRun(async (context: Web3FunctionContext) => {
   const { userArgs, multiChainProvider } = context;
   const { contractAddress } = verifyUserArgs(userArgs);
 
   const provider = multiChainProvider.default();
-  const briber = new ethers.Contract(
-    contractAddress,
-    briberAbi,
-    provider
-  ) as Briber;
+  const briber = new ethers.Contract(contractAddress, abi, provider) as Briber;
 
   const plans = await briber.getPlans();
+  if (plans.length === 0) return { canExec: false, message: "No bribe plans" };
+
+  const plan = plans.reduce((a, b) => (a.nextExec < b.nextExec ? a : b));
   const { timestamp } = await provider.getBlock("latest");
 
-  for (const plan of shuffled(plans)) {
-    // filter out plans which are on cooldown (executed recently)
-    if (plan.nextExec.toBigInt() > timestamp) continue;
+  if (plan.nextExec.toBigInt() > timestamp)
+    return { canExec: false, message: "No bribes executable" };
 
-    // filter out plans with unsupported gauge to proposal translation
-    if (gaugeToProposal[plan.hhBriber] === undefined) continue;
+  if (!gaugeToProposal[plan.hhBriber])
+    return { canExec: false, message: "Briber not supported" };
 
-    const key = ethers.utils.solidityKeccak256(
-      ["address", "address", "address", "uint256", "uint256"],
-      [plan.hhBriber, plan.gauge, plan.token, plan.amount, plan.interval]
-    );
+  const key = ethers.utils.solidityKeccak256(
+    [
+      "uint8",
+      "address",
+      "address",
+      "address",
+      "uint256",
+      "uint256",
+      "uint256",
+      "bool",
+    ],
+    [
+      plan.style,
+      plan.hhBriber,
+      plan.gauge,
+      plan.token,
+      plan.amount,
+      plan.interval,
+      plan.createdAt,
+      plan.canSkip,
+    ]
+  );
 
-    const proposal = await gaugeToProposal[plan.hhBriber](plan.gauge);
-    const tx = await briber.populateTransaction.execBribe(key, proposal);
+  const proposal = await gaugeToProposal[plan.hhBriber](plan.gauge);
 
-    if (!tx.to || !tx.data)
-      return { canExec: false, message: "Invalid transaction" };
+  if (!proposal)
+    return { canExec: false, message: `Invalid proposal for: ${key}` };
 
-    return {
-      canExec: true,
-      callData: [{ to: tx.to, data: tx.data }],
-    };
-  }
+  const tx = await briber.populateTransaction.execBribe(key, proposal);
+
+  if (!tx.to || !tx.data)
+    return { canExec: false, message: "Invalid transaction" };
 
   return {
-    canExec: false,
-    message: "No bribes to execute",
+    canExec: true,
+    callData: [{ to: tx.to, data: tx.data }],
   };
 });

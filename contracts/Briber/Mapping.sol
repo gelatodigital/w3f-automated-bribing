@@ -11,7 +11,7 @@ library Mapping {
         mapping(bytes32 => bool) inserted;
     }
 
-    function set(Map storage map, bytes32 key, Plan calldata value) external {
+    function set(Map storage map, bytes32 key, Plan memory value) internal {
         require(!map.inserted[key], "Mapping.set: duplicate");
 
         map.values[key] = value;
@@ -20,7 +20,7 @@ library Mapping {
         map.keys.push(key);
     }
 
-    function remove(Map storage map, bytes32 key) external {
+    function remove(Map storage map, bytes32 key) internal {
         require(map.inserted[key], "Mapping.remove: non-existant");
 
         delete map.inserted[key];
@@ -36,14 +36,18 @@ library Mapping {
         map.keys.pop();
     }
 
+    function exists(Map storage map, bytes32 key) internal view returns (bool) {
+        return map.inserted[key];
+    }
+
     function get(
         Map storage map,
         bytes32 key
-    ) external view returns (Plan storage) {
+    ) internal view returns (Plan storage) {
         return map.values[key];
     }
 
-    function all(Map storage map) external view returns (Plan[] memory) {
+    function all(Map storage map) internal view returns (Plan[] memory) {
         Plan[] memory plans = new Plan[](map.keys.length);
 
         for (uint256 i = 0; i < map.keys.length; i++)

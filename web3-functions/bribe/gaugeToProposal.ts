@@ -23,7 +23,7 @@ interface IAuraGauge {
 }
 
 interface IGaugeToProposal {
-  (gauge: string): Promise<string>;
+  (gauge: string): Promise<string | null>;
 }
 
 /**
@@ -37,14 +37,16 @@ const balancer: IGaugeToProposal = async (gauge) =>
 
 const aura: IGaugeToProposal = async (gauge) => {
   const gauges: IAuraGauge[] = await ky.get(AURA_GAUGES).json();
-  const label = gauges.find((x) => x.address === gauge)!.label;
+  const label = gauges.find((x) => x.address === gauge)?.label;
+
+  if (!label) return null;
 
   const proposals: IProposals = await ky
     .get(`${HIDDEN_HAND_API}/proposal/aura`)
     .json();
 
-  // if proposal is not found throw (force type)
-  return proposals.data.find((x) => x.title === label)!.proposalHash;
+  const hash = proposals.data.find((x) => x.title === label)?.proposalHash;
+  return hash || null;
 };
 
 const handlers: { [key: string]: IGaugeToProposal } = {

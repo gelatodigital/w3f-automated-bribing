@@ -3,61 +3,50 @@ pragma solidity 0.8.19;
 
 import {IBribe} from "../interfaces/IBribe.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 
 import {AUTOMATE} from "../constants/Automate.sol";
 import {BRIBE_VAULT} from "../constants/BribeVault.sol";
 import {NATIVE_TOKEN} from "../constants/Tokens.sol";
 
-import {Plan} from "./Plan.sol";
 import {Mapping} from "./Mapping.sol";
+import {Plan, PlanStyle} from "./Plan.sol";
 import {AutomateReady} from "../vendor/AutomateReady.sol";
 
-contract Briber is AutomateReady {
+contract Briber is AutomateReady, Pausable {
     using Mapping for Mapping.Map;
 
     address public owner;
     Mapping.Map private _plans;
     mapping(IERC20 => uint256) public allocated;
 
-    event AddedPlan(
-        bytes32 indexed key,
-        IBribe hhBriber,
-        address gauge,
-        IERC20 token,
-        uint256 amount,
-        uint256 interval,
-        uint256 start,
-        uint256 epochs
-    );
+    event CreatedPlan(bytes32 indexed key, Plan plan);
 
-    event AddedPlanAll(
-        bytes32 indexed key,
-        IBribe hhBriber,
-        address gauge,
-        IERC20 token,
-        uint256 interval,
-        uint256 start,
-        uint256 epochs
-    );
+    event RemovedPlan(bytes32 indexed key, Plan plan);
 
-    event RemovedPlan(IBribe hhBriber, address gauge, IERC20 token);
+    event PlanCancelled(bytes32 indexed key, Plan plan);
 
-    event PlanCancelled(IBribe hhBriber, address gauge, IERC20 token);
+    event PlanCompleted(bytes32 indexed key, Plan plan);
 
-    event PlanCompleted(IBribe hhBriber, address gauge, IERC20 token);
+    event PlanSkipped(bytes32 indexed key, Plan plan);
 
     event ExecutedBribe(
-        IBribe hhBriber,
-        address gauge,
-        bytes32 proposal,
-        IERC20 token,
-        uint256 amount,
-        uint256 remainingEpochs
+        bytes32 indexed key,
+        bytes32 indexed proposal,
+        uint256 indexed amount,
+        uint256 fee,
+        Plan plan
     );
 
-    event Deposit(uint256 amount);
-    event Withdraw(address to, uint256 amount);
-    event WithdrawERC20(address to, IERC20 token, uint256 amount);
+    event Deposit(address indexed from, uint256 indexed amount);
+
+    event Withdraw(address indexed to, uint256 indexed amount);
+
+    event WithdrawERC20(
+        address indexed to,
+        IERC20 indexed token,
+        uint256 indexed amount
+    );
 
     modifier onlyOwner() {
         require(msg.sender == owner, "Briber.onlyOwner");
@@ -69,11 +58,18 @@ contract Briber is AutomateReady {
     }
 
     receive() external payable {
-        emit Deposit(msg.value);
+        emit Deposit(msg.sender, msg.value);
     }
 
-    // solhint-disable function-max-lines
-    function addPlan(
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
+    function createPlan(
         IBribe hhBriber,
         address gauge,
         IERC20 token,
@@ -81,82 +77,127 @@ contract Briber is AutomateReady {
         uint256 interval,
         uint256 start,
         uint256 epochs,
+        bool canSkip,
         bool unsafe
     ) external onlyOwner {
-        uint256 totalAmount = amount * epochs;
+        require(amount > 0, "Briber.createPlan: amount must not be zero");
+
+        uint256 totalAmount = _getAllocated(amount, epochs);
 
         // ensures that sufficient tokens are present to execute the plan to completion
         // this can be overridden with unsafe=true
         require(
             unsafe || totalAmount <= _getAvailable(token),
-            "Briber.addPlan: amount exceeds available"
+            "Briber.createPlan: amount exceeds available"
         );
 
         // tokens are allocated to this plan
         allocated[token] += totalAmount;
 
-        bytes32 key = _addPlan(
+        _createPlan(
+            PlanStyle.FIXED,
             hhBriber,
             gauge,
             token,
             amount,
             interval,
             start,
-            epochs
-        );
-
-        emit AddedPlan(
-            key,
-            hhBriber,
-            gauge,
-            token,
-            amount,
-            interval,
-            start,
-            epochs
+            epochs,
+            canSkip
         );
     }
 
     // this function is inherently safe as its plans bribe all unallocated tokens
-    function addPlanAll(
+    function createPlanAll(
         IBribe hhBriber,
         address gauge,
         IERC20 token,
         uint256 interval,
         uint256 start,
-        uint256 epochs
+        uint256 epochs,
+        bool canSkip
     ) external onlyOwner {
-        bytes32 key = _addPlan(
+        _createPlan(
+            PlanStyle.ALL,
             hhBriber,
             gauge,
             token,
             0,
             interval,
             start,
-            epochs
+            epochs,
+            canSkip
+        );
+    }
+
+    // bribe percentage of available (one decimal place -> 100% = 1000)
+    // this function is inherently safe as its plans bribe a percentage of all unallocated tokens
+    function createPlanPct(
+        IBribe hhBriber,
+        address gauge,
+        IERC20 token,
+        uint256 percent,
+        uint256 interval,
+        uint256 start,
+        uint256 epochs,
+        bool canSkip
+    ) external onlyOwner {
+        require(
+            percent > 0 && percent <= 1000,
+            "Briber.createPlanPct: percentage must be between 0-1000"
         );
 
-        emit AddedPlanAll(key, hhBriber, gauge, token, interval, start, epochs);
+        _createPlan(
+            PlanStyle.PERCENT,
+            hhBriber,
+            gauge,
+            token,
+            percent,
+            interval,
+            start,
+            epochs,
+            canSkip
+        );
     }
 
     function removePlan(bytes32 key) external onlyOwner {
         Plan storage plan = _plans.get(key);
 
-        // free up its allocated tokens
-        uint256 remainingAmount = _getAllocated(
-            plan.amount,
-            plan.remainingEpochs
-        );
-        allocated[plan.token] -= remainingAmount;
+        if (plan.style == PlanStyle.FIXED) {
+            // free up remaining portion of allocated tokens
+            uint256 remainingAmount = _getAllocated(
+                plan.amount,
+                plan.remainingEpochs
+            );
+            allocated[plan.token] -= remainingAmount;
+        }
 
-        emit RemovedPlan(plan.hhBriber, plan.gauge, plan.token);
+        emit RemovedPlan(key, plan);
         _plans.remove(key);
+    }
+
+    // queue a plan for immediate execution
+    // this doesn't work for plans with start times multiple epochs in the future
+    // e.g., allows for re-exec of a plan which was skipped due to insufficient tokens
+    function execBribeOnce(bytes32 key) external onlyOwner {
+        Plan storage plan = _plans.get(key);
+
+        plan.nextExec -= plan.interval;
+
+        // solhint-disable not-rely-on-time
+        require(
+            plan.nextExec <= block.timestamp,
+            "Briber.execBribeOnce: cannot queue for immediate execution"
+        );
     }
 
     function execBribe(
         bytes32 key,
         bytes32 proposal
-    ) external onlyDedicatedMsgSender {
+    ) external onlyDedicatedMsgSender whenNotPaused {
+        (uint256 fee, address feeToken) = _getFeeDetails();
+        _transfer(fee, feeToken);
+
         Plan storage plan = _plans.get(key);
 
         // avoid timeslip (block.timestamp is not used)
@@ -164,23 +205,27 @@ contract Briber is AutomateReady {
         plan.nextExec += plan.interval;
         plan.remainingEpochs--;
 
-        bool removed = plan.amount == 0
-            ? _execBribeAll(plan, proposal)
-            : _execBribe(key, plan, proposal);
+        // free up tokens used for the bribe
+        // regardless of execution
+        if (plan.style == PlanStyle.FIXED) allocated[plan.token] -= plan.amount;
 
-        // if the plan is not already removed during bribing
-        // remove the plan if it is completed (no more epochs remaining)
+        uint256 amount = _getBribeAmount(plan);
+
+        if (amount > 0) _bribe(key, plan, proposal, amount, fee);
+        else _skipPlan(key, plan);
+
+        // if plan is not already removed
+        // remove plan if it has completed (no more epochs remaining)
         // no need to free up tokens since they are guaranteed to have been spent
-        if (!removed && plan.remainingEpochs == 0) {
-            emit PlanCompleted(plan.hhBriber, plan.gauge, plan.token);
+        if (plan.remainingEpochs == 0 && _plans.exists(key)) {
+            emit PlanCompleted(key, plan);
             _plans.remove(key);
         }
-
-        (uint256 fee, address feeToken) = _getFeeDetails();
-        _transfer(fee, feeToken);
     }
 
     function withdraw(address payable to, uint256 amount) external onlyOwner {
+        require(amount > 0, "Briber.withdraw: amount must not be zero");
+
         (bool sent, ) = to.call{value: amount}("");
         require(sent, "Briber.withdraw: failed to withdraw");
 
@@ -193,6 +238,18 @@ contract Briber is AutomateReady {
         uint256 amount,
         bool unsafe
     ) external onlyOwner {
+        require(amount > 0, "Briber.withdrawERC20: amount must not be zero");
+
+        require(
+            address(token) != address(0),
+            "Briber.withdrawERC20: invalid token"
+        );
+
+        require(
+            address(token) != NATIVE_TOKEN,
+            "Briber.withdrawERC20: use 'Briber.withdraw' instead"
+        );
+
         // prevents withdrawing tokens which are in use by existing plans
         // can be overriden with unsafe=true
         require(
@@ -214,120 +271,154 @@ contract Briber is AutomateReady {
         return _plans.all();
     }
 
-    function _addPlan(
+    // solhint-disable function-max-lines
+    function _createPlan(
+        PlanStyle style,
         IBribe hhBriber,
         address gauge,
         IERC20 token,
         uint256 amount,
         uint256 interval,
         uint256 start,
-        uint256 epochs
-    ) internal returns (bytes32) {
-        require(epochs > 0, "Briber.addPlan: must have one or more epochs");
+        uint256 epochs,
+        bool canSkip
+    ) internal {
+        require(epochs > 0, "Briber._createPlan: must have one or more epochs");
         require(
             interval >= 60,
-            "Briber.addPlan: must have at least one minute intervals"
+            "Briber._createPlan: must have at least one minute interval"
         );
 
-        require(gauge != address(0), "Briber.addPlan: invalid gauge");
+        require(gauge != address(0), "Briber._createPlan: invalid gauge");
         require(
             address(hhBriber) != address(0),
-            "Briber.addPlan: invalid briber"
+            "Briber._createPlan: invalid briber"
         );
 
-        require(address(token) != address(0), "Briber.addPlan: invalid token");
+        require(
+            address(token) != address(0),
+            "Briber._createPlan: invalid token"
+        );
         require(
             address(token) != NATIVE_TOKEN,
-            "Briber.addPlan: native token not supported"
+            "Briber._createPlan: native token not supported"
+        );
+        require(
+            hhBriber.isWhitelistedToken(token),
+            "Briber._createPlan: token not whitelisted"
         );
 
         // solhint-disable not-rely-on-time
-        if (start < block.timestamp) start = block.timestamp;
+        uint256 createdAt = block.timestamp;
+
+        if (start == 0)
+            // start now
+            start = createdAt;
+        else {
+            // ensure the plan starts either:
+            // 1. in the future (or now)
+            // 2. no more than one epoch in the past
+            //    this allows us to e.g., schedule a plan for every Wednesday which is
+            //    created on a Thursday without having to wait 6 days for the first exec
+            //    the first exec will be on Thursday and subsequent execs on Wednesday
+            require(
+                start >= createdAt || createdAt - start < interval,
+                "Briber._createPlan: Start must not be more than one epoch in the past"
+            );
+        }
 
         // derive unique identifier key
-        // can not use start or epochs since they are mutable
+        // can not use nextExec or remainingEpochs since they are mutable
         bytes32 key = keccak256(
-            abi.encodePacked(hhBriber, gauge, token, amount, interval)
+            abi.encodePacked(
+                style,
+                hhBriber,
+                gauge,
+                token,
+                amount,
+                interval,
+                createdAt,
+                canSkip
+            )
         );
 
-        _plans.set(
-            key,
-            Plan(hhBriber, gauge, token, amount, interval, start, epochs)
+        Plan memory plan = Plan(
+            style,
+            hhBriber,
+            gauge,
+            token,
+            amount,
+            interval,
+            start,
+            createdAt,
+            epochs,
+            canSkip
         );
 
-        return key;
+        _plans.set(key, plan);
+        emit CreatedPlan(key, plan);
     }
 
-    function _execBribe(
+    function _bribe(
         bytes32 key,
         Plan storage plan,
-        bytes32 proposal
-    ) internal returns (bool removed) {
-        if (plan.amount > plan.token.balanceOf(address(this))) {
-            // gracefully cancel the plan if insufficient tokens are available for the bribe
-            // this can only be the case if:
-            //      1. an unsafe plan is added and/or
-            //      2. an unsafe withdrawal is requested
+        bytes32 proposal,
+        uint256 amount,
+        uint256 fee
+    ) internal {
+        require(
+            plan.hhBriber.proposalDeadlines(proposal) > block.timestamp,
+            "Briber._bribe: proposal deadline has passed"
+        );
 
+        plan.token.approve(BRIBE_VAULT, amount);
+        plan.hhBriber.depositBribeERC20(proposal, plan.token, amount);
+
+        emit ExecutedBribe(key, proposal, amount, fee, plan);
+    }
+
+    function _skipPlan(bytes32 key, Plan storage plan) internal {
+        if (plan.canSkip) {
+            emit PlanSkipped(key, plan);
+            return;
+        }
+
+        // cancel the plan if it is not skippable
+        if (plan.style == PlanStyle.FIXED) {
             // free up remaining portion of allocated tokens
             uint256 remainingAmount = _getAllocated(
                 plan.amount,
                 plan.remainingEpochs
             );
             allocated[plan.token] -= remainingAmount;
-
-            emit PlanCancelled(plan.hhBriber, plan.gauge, plan.token);
-            _plans.remove(key);
-
-            // signal that the plan is removed
-            // prevents the caller from performing operations on the deleted object
-            return true;
-        } else {
-            _bribe(plan, plan.amount, proposal);
-
-            // free up tokens used for the bribe
-            allocated[plan.token] -= plan.amount;
-
-            return false;
         }
+
+        emit PlanCancelled(key, plan);
+        _plans.remove(key);
     }
 
-    function _execBribeAll(
-        Plan storage plan,
-        bytes32 proposal
-    ) internal returns (bool removed) {
-        uint256 amount = _getAvailable(plan.token);
+    function _getBribeAmount(
+        Plan storage plan
+    ) internal view returns (uint256) {
+        // fixed plans can only have insufficient tokens if:
+        // 1. an unsafe plan was added and/or
+        // 2. an unsafe withdrawal was requested
+        if (plan.style == PlanStyle.FIXED)
+            return
+                plan.amount <= plan.token.balanceOf(address(this))
+                    ? plan.amount
+                    : 0;
 
-        // if there are available tokens in the contract we bribe them
-        // if not we do nothing
-        if (amount > 0) _bribe(plan, amount, proposal);
-
-        return false;
-    }
-
-    function _bribe(
-        Plan storage plan,
-        uint256 amount,
-        bytes32 proposal
-    ) internal {
-        plan.token.approve(BRIBE_VAULT, amount);
-
-        plan.hhBriber.depositBribeERC20(proposal, plan.token, amount);
-
-        emit ExecutedBribe(
-            plan.hhBriber,
-            plan.gauge,
-            proposal,
-            plan.token,
-            amount,
-            plan.remainingEpochs
-        );
+        uint256 available = _getAvailable(plan.token);
+        return
+            plan.style == PlanStyle.PERCENT
+                ? (available * plan.amount) / 1000
+                : available;
     }
 
     // get the contract balance excluding tokens allocated to existing plans
     function _getAvailable(IERC20 token) internal view returns (uint256) {
         uint256 balance = token.balanceOf(address(this));
-
         return balance > allocated[token] ? balance - allocated[token] : 0;
     }
 

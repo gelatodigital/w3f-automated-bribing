@@ -14,9 +14,18 @@ const config: HardhatUserConfig = {
   w3f: {
     rootDir: "./web3-functions",
     debug: false,
-    networks: ["ethereum"],
+    networks: ["ethereum", "mumbai"],
   },
-  solidity: "0.8.19",
+  solidity: {
+    compilers: [
+      {
+        version: "0.8.19",
+        settings: {
+          optimizer: { enabled: true },
+        },
+      },
+    ],
+  },
   typechain: {
     outDir: "typechain",
     target: "ethers-v5",
@@ -41,6 +50,11 @@ const config: HardhatUserConfig = {
     ethereum: {
       chainId: 1,
       url: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_ID}`,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+    },
+    mumbai: {
+      chainId: 80001,
+      url: `https://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_ID}`,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
   },

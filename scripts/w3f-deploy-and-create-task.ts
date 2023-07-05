@@ -25,12 +25,13 @@ const main = async () => {
     web3FunctionArgs: {
       contractAddress: briberAddress.address,
     },
-    useTreasury: true,
+    useTreasury: false,
   });
 
   await tx.wait();
-
-  console.log(`Created W3F task ${taskId}.`);
+  console.log(
+    `Created W3F task: https://beta.app.gelato.network/task/${taskId}?chainId=${chainId}`
+  );
 };
 
 main().catch((error) => {

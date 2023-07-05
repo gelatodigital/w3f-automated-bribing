@@ -9,4 +9,10 @@ interface IBribe {
         IERC20 token,
         uint256 amount
     ) external;
+
+    function proposalDeadlines(
+        bytes32 proposal
+    ) external view returns (uint256);
+
+    function isWhitelistedToken(IERC20 token) external view returns (bool);
 }
