@@ -18,7 +18,6 @@ contract MockBribe is IBribe {
         uint256 amount
     ) external {
         token.transferFrom(msg.sender, address(this), amount);
-
         emit DepositBribe(proposal, token, amount, msg.sender);
     }
 

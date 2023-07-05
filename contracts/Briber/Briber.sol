@@ -284,12 +284,14 @@ contract Briber is AutomateReady, Pausable {
         bool canSkip
     ) internal {
         require(epochs > 0, "Briber._createPlan: must have one or more epochs");
+
         require(
             interval >= 60,
             "Briber._createPlan: must have at least one minute interval"
         );
 
         require(gauge != address(0), "Briber._createPlan: invalid gauge");
+
         require(
             address(hhBriber) != address(0),
             "Briber._createPlan: invalid briber"
@@ -410,6 +412,7 @@ contract Briber is AutomateReady, Pausable {
                     : 0;
 
         uint256 available = _getAvailable(plan.token);
+
         return
             plan.style == PlanStyle.PERCENT
                 ? (available * plan.amount) / 1000
