@@ -63,8 +63,8 @@ describe("Oracle1Balance", () => {
       .connect(deployer)
       .createTask(proxyAddress, "0xc0e8c0c2", moduleData, NATIVE_TOKEN);
 
-    await setBalance(briberAddress, ethers.utils.parseEther("1"));
-    await setBalance(gearMultisigAddress, ethers.utils.parseEther("2"));
+    await setBalance(briberAddress, ethers.utils.parseEther("10"));
+    await setBalance(gearMultisigAddress, ethers.utils.parseEther("10"));
 
     userArgs = {
       contractAddress: briberAddress,
@@ -263,13 +263,12 @@ describe("Oracle1Balance", () => {
 
   it("Briber.removePlan: RemovedPlan", async () => {
     const plans = await briber.getPlans();
-    const plan = plans.find((x) => x.amount.toBigInt() !== 0n);
+    const plan = plans.find((x) => x.isFixed);
 
     if (!plan) assert.fail("Plan not found");
 
     const key = ethers.utils.solidityKeccak256(
       [
-        "uint8",
         "address",
         "address",
         "address",
@@ -277,9 +276,9 @@ describe("Oracle1Balance", () => {
         "uint256",
         "uint256",
         "bool",
+        "bool",
       ],
       [
-        plan.style,
         plan.hhBriber,
         plan.gauge,
         plan.token,
@@ -287,6 +286,7 @@ describe("Oracle1Balance", () => {
         plan.interval,
         plan.createdAt,
         plan.canSkip,
+        plan.isFixed,
       ]
     );
 

@@ -40,7 +40,6 @@ Web3Function.onRun(async (context: Web3FunctionContext) => {
 
   const key = ethers.utils.solidityKeccak256(
     [
-      "uint8",
       "address",
       "address",
       "address",
@@ -48,9 +47,9 @@ Web3Function.onRun(async (context: Web3FunctionContext) => {
       "uint256",
       "uint256",
       "bool",
+      "bool",
     ],
     [
-      plan.style,
       plan.hhBriber,
       plan.gauge,
       plan.token,
@@ -58,6 +57,7 @@ Web3Function.onRun(async (context: Web3FunctionContext) => {
       plan.interval,
       plan.createdAt,
       plan.canSkip,
+      plan.isFixed,
     ]
   );
 

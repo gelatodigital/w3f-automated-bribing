@@ -4,14 +4,7 @@ pragma solidity 0.8.19;
 import {IBribe} from "../interfaces/IBribe.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-enum PlanStyle {
-    ALL,
-    FIXED,
-    PERCENT
-}
-
 struct Plan {
-    PlanStyle style;
     IBribe hhBriber;
     address gauge;
     IERC20 token;
@@ -21,4 +14,5 @@ struct Plan {
     uint256 createdAt;
     uint256 remainingEpochs;
     bool canSkip;
+    bool isFixed;
 }

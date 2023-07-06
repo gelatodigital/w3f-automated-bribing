@@ -9,8 +9,8 @@ import {AUTOMATE} from "../constants/Automate.sol";
 import {BRIBE_VAULT} from "../constants/BribeVault.sol";
 import {NATIVE_TOKEN} from "../constants/Tokens.sol";
 
+import {Plan} from "./Plan.sol";
 import {Mapping} from "./Mapping.sol";
-import {Plan, PlanStyle} from "./Plan.sol";
 import {AutomateReady} from "../vendor/AutomateReady.sol";
 
 contract Briber is AutomateReady, Pausable {
@@ -95,7 +95,6 @@ contract Briber is AutomateReady, Pausable {
         allocated[token] += totalAmount;
 
         _createPlan(
-            PlanStyle.FIXED,
             hhBriber,
             gauge,
             token,
@@ -103,7 +102,8 @@ contract Briber is AutomateReady, Pausable {
             interval,
             start,
             epochs,
-            canSkip
+            canSkip,
+            true
         );
     }
 
@@ -118,15 +118,15 @@ contract Briber is AutomateReady, Pausable {
         bool canSkip
     ) external onlyOwner {
         _createPlan(
-            PlanStyle.ALL,
             hhBriber,
             gauge,
             token,
-            0,
+            1000,
             interval,
             start,
             epochs,
-            canSkip
+            canSkip,
+            false
         );
     }
 
@@ -148,7 +148,6 @@ contract Briber is AutomateReady, Pausable {
         );
 
         _createPlan(
-            PlanStyle.PERCENT,
             hhBriber,
             gauge,
             token,
@@ -156,22 +155,15 @@ contract Briber is AutomateReady, Pausable {
             interval,
             start,
             epochs,
-            canSkip
+            canSkip,
+            false
         );
     }
 
     function removePlan(bytes32 key) external onlyOwner {
         Plan storage plan = _plans.get(key);
 
-        if (plan.style == PlanStyle.FIXED) {
-            // free up remaining portion of allocated tokens
-            uint256 remainingAmount = _getAllocated(
-                plan.amount,
-                plan.remainingEpochs
-            );
-            allocated[plan.token] -= remainingAmount;
-        }
-
+        _freeAllocated(plan);
         emit RemovedPlan(key, plan);
         _plans.remove(key);
     }
@@ -207,7 +199,7 @@ contract Briber is AutomateReady, Pausable {
 
         // free up tokens used for the bribe
         // regardless of execution
-        if (plan.style == PlanStyle.FIXED) allocated[plan.token] -= plan.amount;
+        if (plan.isFixed) allocated[plan.token] -= plan.amount;
 
         uint256 amount = _getBribeAmount(plan);
 
@@ -273,7 +265,6 @@ contract Briber is AutomateReady, Pausable {
 
     // solhint-disable function-max-lines
     function _createPlan(
-        PlanStyle style,
         IBribe hhBriber,
         address gauge,
         IERC20 token,
@@ -281,7 +272,8 @@ contract Briber is AutomateReady, Pausable {
         uint256 interval,
         uint256 start,
         uint256 epochs,
-        bool canSkip
+        bool canSkip,
+        bool isFixed
     ) internal {
         require(epochs > 0, "Briber._createPlan: must have one or more epochs");
 
@@ -333,19 +325,18 @@ contract Briber is AutomateReady, Pausable {
         // can not use nextExec or remainingEpochs since they are mutable
         bytes32 key = keccak256(
             abi.encodePacked(
-                style,
                 hhBriber,
                 gauge,
                 token,
                 amount,
                 interval,
                 createdAt,
-                canSkip
+                canSkip,
+                isFixed
             )
         );
 
         Plan memory plan = Plan(
-            style,
             hhBriber,
             gauge,
             token,
@@ -354,7 +345,8 @@ contract Briber is AutomateReady, Pausable {
             start,
             createdAt,
             epochs,
-            canSkip
+            canSkip,
+            isFixed
         );
 
         _plans.set(key, plan);
@@ -386,17 +378,21 @@ contract Briber is AutomateReady, Pausable {
         }
 
         // cancel the plan if it is not skippable
-        if (plan.style == PlanStyle.FIXED) {
-            // free up remaining portion of allocated tokens
-            uint256 remainingAmount = _getAllocated(
-                plan.amount,
-                plan.remainingEpochs
-            );
-            allocated[plan.token] -= remainingAmount;
-        }
-
+        _freeAllocated(plan);
         emit PlanCancelled(key, plan);
         _plans.remove(key);
+    }
+
+    function _freeAllocated(Plan storage plan) internal {
+        if (!plan.isFixed) return;
+
+        // free up remaining portion of allocated tokens
+        uint256 remainingAmount = _getAllocated(
+            plan.amount,
+            plan.remainingEpochs
+        );
+
+        allocated[plan.token] -= remainingAmount;
     }
 
     function _getBribeAmount(
@@ -405,18 +401,14 @@ contract Briber is AutomateReady, Pausable {
         // fixed plans can only have insufficient tokens if:
         // 1. an unsafe plan was added and/or
         // 2. an unsafe withdrawal was requested
-        if (plan.style == PlanStyle.FIXED)
+        if (plan.isFixed)
             return
                 plan.amount <= plan.token.balanceOf(address(this))
                     ? plan.amount
                     : 0;
 
         uint256 available = _getAvailable(plan.token);
-
-        return
-            plan.style == PlanStyle.PERCENT
-                ? (available * plan.amount) / 1000
-                : available;
+        return (available * plan.amount) / 1000;
     }
 
     // get the contract balance excluding tokens allocated to existing plans
