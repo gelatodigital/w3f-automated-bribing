@@ -90,7 +90,7 @@ This behaviour can be overridden with ``unsafe=true`` in ``addPlan`` and ``withd
    ```
 4. Deploy contracts
    ```
-   yarn run hardhat deploy --network ethereum
+   yarn run hardhat deploy --tags Briber --network ethereum
    ```
 5. Deploy the W3F to IPFS and create a W3F task
    ```
