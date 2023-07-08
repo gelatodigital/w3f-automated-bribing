@@ -57,14 +57,14 @@ contract Briber is AutomateReady, Ownable, Pausable {
     }
 
     /**
-     * @notice Prevent bribes from being executed
+     * @notice Pause bribe execution
      */
     function pause() external onlyOwner {
         _pause();
     }
 
     /**
-     * @notice Allow bribes to be executed
+     * @notice Unpause bribe execution
      */
     function unpause() external onlyOwner {
         _unpause();
@@ -154,7 +154,7 @@ contract Briber is AutomateReady, Ownable, Pausable {
     }
 
     /**
-     * @notice Create a bribe plan which bribes all tokens on execution
+     * @notice Create a bribe plan which bribes a percentage of all tokens on execution
      * @dev Inherently safe as its plans bribe a percentage of all unallocated tokens
      * @param hhBriber  hidden hand briber
      * @param gauge     gauge to bribe
