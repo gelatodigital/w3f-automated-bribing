@@ -29,44 +29,24 @@ Web3Function.onRun(async (context: Web3FunctionContext) => {
   const plans = await briber.getPlans();
   if (plans.length === 0) return { canExec: false, message: "No bribe plans" };
 
-  const plan = plans.reduce((a, b) => (a.nextExec < b.nextExec ? a : b));
-  const { timestamp } = await provider.getBlock("latest");
-
-  if (plan.nextExec.toBigInt() > timestamp)
-    return { canExec: false, message: "No bribes executable" };
-
-  if (!gaugeToProposal[plan.hhBriber])
-    return { canExec: false, message: "Briber not supported" };
-
-  const key = ethers.utils.solidityKeccak256(
-    [
-      "address",
-      "address",
-      "address",
-      "uint256",
-      "uint256",
-      "uint256",
-      "bool",
-      "bool",
-    ],
-    [
-      plan.hhBriber,
-      plan.gauge,
-      plan.token,
-      plan.amount,
-      plan.interval,
-      plan.createdAt,
-      plan.canSkip,
-      plan.isFixed,
-    ]
+  const plan = plans.reduce((a, b) =>
+    a.value.nextExec < b.value.nextExec ? a : b
   );
 
-  const proposal = await gaugeToProposal[plan.hhBriber](plan.gauge);
+  const { timestamp } = await provider.getBlock("latest");
+
+  if (plan.value.nextExec.toBigInt() > timestamp)
+    return { canExec: false, message: "No bribes executable" };
+
+  if (!gaugeToProposal[plan.value.hhBriber])
+    return { canExec: false, message: "Briber not supported" };
+
+  const proposal = await gaugeToProposal[plan.value.hhBriber](plan.value.gauge);
 
   if (!proposal)
-    return { canExec: false, message: `Invalid proposal for: ${key}` };
+    return { canExec: false, message: `Invalid proposal for: ${plan.key}` };
 
-  const tx = await briber.populateTransaction.execBribe(key, proposal);
+  const tx = await briber.populateTransaction.execBribe(plan.key, proposal);
 
   if (!tx.to || !tx.data)
     return { canExec: false, message: "Invalid transaction" };

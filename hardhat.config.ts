@@ -6,15 +6,18 @@ import "@typechain/hardhat";
 import "hardhat-deploy";
 import "dotenv";
 
-const ALCHEMY_ID = process.env.ALCHEMY_ID;
+const RPC_PROVIDER = process.env.RPC_PROVIDER;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 const ETHERSCAN_KEY = process.env.ETHERSCAN_KEY;
+
+import assert from "assert";
+assert.ok(RPC_PROVIDER, "Missing RPC_PROVIDER in .env");
 
 const config: HardhatUserConfig = {
   w3f: {
     rootDir: "./web3-functions",
     debug: false,
-    networks: ["ethereum", "mumbai"],
+    networks: ["ethereum"],
   },
   solidity: {
     compilers: [
@@ -44,18 +47,13 @@ const config: HardhatUserConfig = {
   networks: {
     hardhat: {
       forking: {
-        url: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_ID}`,
-        blockNumber: 17628865,
+        url: RPC_PROVIDER,
+        blockNumber: 17649538,
       },
     },
     ethereum: {
       chainId: 1,
-      url: `https://eth-mainnet.g.alchemy.com/v2/${ALCHEMY_ID}`,
-      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
-    },
-    mumbai: {
-      chainId: 80001,
-      url: `https://polygon-mumbai.g.alchemy.com/v2/${ALCHEMY_ID}`,
+      url: RPC_PROVIDER,
       accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
     },
   },

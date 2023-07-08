@@ -11,6 +11,11 @@ library Mapping {
         mapping(bytes32 => bool) inserted;
     }
 
+    struct Pair {
+        bytes32 key;
+        Plan value;
+    }
+
     function set(Map storage map, bytes32 key, Plan memory value) internal {
         require(!map.inserted[key], "Mapping.set: duplicate");
 
@@ -47,12 +52,14 @@ library Mapping {
         return map.values[key];
     }
 
-    function all(Map storage map) internal view returns (Plan[] memory) {
-        Plan[] memory plans = new Plan[](map.keys.length);
+    function all(Map storage map) internal view returns (Pair[] memory) {
+        Pair[] memory pairs = new Pair[](map.keys.length);
 
-        for (uint256 i = 0; i < map.keys.length; i++)
-            plans[i] = map.values[map.keys[i]];
+        for (uint256 i = 0; i < map.keys.length; i++) {
+            bytes32 key = map.keys[i];
+            pairs[i] = Pair(key, map.values[key]);
+        }
 
-        return plans;
+        return pairs;
     }
 }

@@ -13,8 +13,8 @@ import {
 } from "@gelatonetwork/web3-functions-sdk";
 
 const NATIVE_TOKEN = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
-const HH_BRIBER_ADDRESS = "0x7Cdf753b45AB0729bcFe33DC12401E55d28308A9"; // Balancer
-//const HH_BRIBER_ADDRESS = "0x642c59937A62cf7dc92F70Fd78A13cEe0aa2Bd9c"; // Aura
+//const HH_BRIBER_ADDRESS = "0x45Bc37b18E73A42A4a826357a8348cDC042cCBBc"; // Balancer
+const HH_BRIBER_ADDRESS = "0xcBf242F20D183B4116C22Dd5e441b9aE15b0d35A"; // Aura
 const GEAR_TOKEN = "0xBa3335588D9403515223F109EdC4eB7269a9Ab5D";
 const BB_G_USD_GAUGE = "0x19A13793af96f534F0027b4b6a3eB699647368e7";
 
@@ -263,34 +263,11 @@ describe("Oracle1Balance", () => {
 
   it("Briber.removePlan: RemovedPlan", async () => {
     const plans = await briber.getPlans();
-    const plan = plans.find((x) => x.isFixed);
+    const plan = plans.find((x) => x.value.isFixed);
 
     if (!plan) assert.fail("Plan not found");
 
-    const key = ethers.utils.solidityKeccak256(
-      [
-        "address",
-        "address",
-        "address",
-        "uint256",
-        "uint256",
-        "uint256",
-        "bool",
-        "bool",
-      ],
-      [
-        plan.hhBriber,
-        plan.gauge,
-        plan.token,
-        plan.amount,
-        plan.interval,
-        plan.createdAt,
-        plan.canSkip,
-        plan.isFixed,
-      ]
-    );
-
-    await expect(briber.removePlan(key)).to.emit(briber, "RemovedPlan");
+    await expect(briber.removePlan(plan.key)).to.emit(briber, "RemovedPlan");
   });
 
   it("Briber.createPlan: CreatedPlan", async () => {

@@ -3,6 +3,8 @@ pragma solidity 0.8.19;
 
 import {IBribe} from "../interfaces/IBribe.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
 
 import {AUTOMATE} from "../constants/Automate.sol";
@@ -13,10 +15,9 @@ import {Plan} from "./Plan.sol";
 import {Mapping} from "./Mapping.sol";
 import {AutomateReady} from "../vendor/AutomateReady.sol";
 
-contract Briber is AutomateReady, Pausable {
+contract Briber is AutomateReady, Ownable, Pausable {
     using Mapping for Mapping.Map;
 
-    address public owner;
     Mapping.Map private _plans;
     mapping(IERC20 => uint256) public allocated;
 
@@ -48,27 +49,39 @@ contract Briber is AutomateReady, Pausable {
         uint256 indexed amount
     );
 
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Briber.onlyOwner");
-        _;
-    }
-
-    constructor() AutomateReady(AUTOMATE, msg.sender) {
-        owner = msg.sender;
-    }
+    // solhint-disable-next-line no-empty-blocks
+    constructor() AutomateReady(AUTOMATE, msg.sender) {}
 
     receive() external payable {
         emit Deposit(msg.sender, msg.value);
     }
 
+    /**
+     * @notice Prevent bribes from being executed
+     */
     function pause() external onlyOwner {
         _pause();
     }
 
+    /**
+     * @notice Allow bribes to be executed
+     */
     function unpause() external onlyOwner {
         _unpause();
     }
 
+    /**
+     * @notice Create a fixed amount bribe plan
+     * @param hhBriber  hidden hand briber
+     * @param gauge     gauge to bribe
+     * @param token     ERC20 token to bribe
+     * @param amount    amount to bribe per epoch
+     * @param interval  time between each epoch
+     * @param start     plan start time (zero to start immediately)
+     * @param epochs    number of executions
+     * @param canSkip   if insufficient tokens available, plan is skipped rather than cancelled
+     * @param unsafe    allow plan creation even if insufficient tokens to run until completion
+     */
     function createPlan(
         IBribe hhBriber,
         address gauge,
@@ -107,7 +120,17 @@ contract Briber is AutomateReady, Pausable {
         );
     }
 
-    // this function is inherently safe as its plans bribe all unallocated tokens
+    /**
+     * @notice Create a bribe plan which bribes all tokens on execution
+     * @dev Inherently safe as its plans bribe all unallocated tokens
+     * @param hhBriber  hidden hand briber
+     * @param gauge     gauge to bribe
+     * @param token     ERC20 token to bribe
+     * @param interval  time between each epoch
+     * @param start     plan start time (zero to start immediately)
+     * @param epochs    number of executions
+     * @param canSkip   if no tokens available, plan is skipped rather than cancelled
+     */
     function createPlanAll(
         IBribe hhBriber,
         address gauge,
@@ -130,8 +153,18 @@ contract Briber is AutomateReady, Pausable {
         );
     }
 
-    // bribe percentage of available (one decimal place -> 100% = 1000)
-    // this function is inherently safe as its plans bribe a percentage of all unallocated tokens
+    /**
+     * @notice Create a bribe plan which bribes all tokens on execution
+     * @dev Inherently safe as its plans bribe a percentage of all unallocated tokens
+     * @param hhBriber  hidden hand briber
+     * @param gauge     gauge to bribe
+     * @param token     ERC20 token to bribe
+     * @param percent   percentage of available tokens to bribe (one decimal => 100% = 1000)
+     * @param interval  time between each epoch
+     * @param start     plan start time (zero to start immediately)
+     * @param epochs    number of executions
+     * @param canSkip   if no tokens available, plan is skipped rather than cancelled
+     */
     function createPlanPct(
         IBribe hhBriber,
         address gauge,
@@ -160,6 +193,10 @@ contract Briber is AutomateReady, Pausable {
         );
     }
 
+    /**
+     * @notice Removes a bribe plan and frees its remaining allocated tokens
+     * @param key plan identifier
+     */
     function removePlan(bytes32 key) external onlyOwner {
         Plan storage plan = _plans.get(key);
 
@@ -168,21 +205,29 @@ contract Briber is AutomateReady, Pausable {
         _plans.remove(key);
     }
 
-    // queue a plan for immediate execution
-    // this doesn't work for plans with start times multiple epochs in the future
-    // e.g., allows for re-exec of a plan which was skipped due to insufficient tokens
+    /**
+     * @notice Queue a bribe plan for immediate execution
+     * @dev Doesn't work for plans with start times multiple epochs in the future
+     * @param key plan identifier
+     */
     function execBribeOnce(bytes32 key) external onlyOwner {
         Plan storage plan = _plans.get(key);
 
         plan.nextExec -= plan.interval;
 
-        // solhint-disable not-rely-on-time
         require(
+            // solhint-disable-next-line not-rely-on-time
             plan.nextExec <= block.timestamp,
             "Briber.execBribeOnce: cannot queue for immediate execution"
         );
     }
 
+    /**
+     * @notice Executes a bribe plan (Web3 Function)
+     * @dev Proposal hash is computed by a W3F off-chain
+     * @param key plan identifier
+     * @param key proposal hash
+     */
     function execBribe(
         bytes32 key,
         bytes32 proposal
@@ -215,6 +260,11 @@ contract Briber is AutomateReady, Pausable {
         }
     }
 
+    /**
+     * @notice Withdraw native token
+     * @param to recipient address
+     * @param amount native token amount
+     */
     function withdraw(address payable to, uint256 amount) external onlyOwner {
         require(amount > 0, "Briber.withdraw: amount must not be zero");
 
@@ -224,6 +274,13 @@ contract Briber is AutomateReady, Pausable {
         emit Withdraw(to, amount);
     }
 
+    /**
+     * @notice Withdraw ERC20 token
+     * @param to recipient address
+     * @param token ERC20 token
+     * @param amount native token amount
+     * @param unsafe allow withdrawal of tokens in use by existing plans
+     */
     function withdrawERC20(
         address payable to,
         IERC20 token,
@@ -255,15 +312,24 @@ contract Briber is AutomateReady, Pausable {
         emit WithdrawERC20(to, token, amount);
     }
 
+    /**
+     * @notice Get a bribe plan
+     * @param key plan identifier
+     * @return plan respective bribe plan
+     */
     function getPlan(bytes32 key) external view returns (Plan memory) {
         return _plans.get(key);
     }
 
-    function getPlans() external view returns (Plan[] memory) {
+    /**
+     * @notice Get all bribe plans
+     * @return plans key value pairs of keys and plans
+     */
+    function getPlans() external view returns (Mapping.Pair[] memory) {
         return _plans.all();
     }
 
-    // solhint-disable function-max-lines
+    // solhint-disable-next-line function-max-lines
     function _createPlan(
         IBribe hhBriber,
         address gauge,
@@ -302,7 +368,7 @@ contract Briber is AutomateReady, Pausable {
             "Briber._createPlan: token not whitelisted"
         );
 
-        // solhint-disable not-rely-on-time
+        // solhint-disable-next-line not-rely-on-time
         uint256 createdAt = block.timestamp;
 
         if (start == 0)
@@ -361,12 +427,13 @@ contract Briber is AutomateReady, Pausable {
         uint256 fee
     ) internal {
         require(
+            // solhint-disable-next-line not-rely-on-time
             plan.hhBriber.proposalDeadlines(proposal) > block.timestamp,
             "Briber._bribe: proposal deadline has passed"
         );
 
         plan.token.approve(BRIBE_VAULT, amount);
-        plan.hhBriber.depositBribeERC20(proposal, plan.token, amount);
+        plan.hhBriber.depositBribe(proposal, plan.token, amount, amount, 1);
 
         emit ExecutedBribe(key, proposal, amount, fee, plan);
     }
