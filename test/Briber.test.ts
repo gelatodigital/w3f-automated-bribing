@@ -18,7 +18,7 @@ const HH_BRIBER_ADDRESS = "0xcBf242F20D183B4116C22Dd5e441b9aE15b0d35A"; // Aura
 const GEAR_TOKEN = "0xBa3335588D9403515223F109EdC4eB7269a9Ab5D";
 const BB_G_USD_GAUGE = "0x19A13793af96f534F0027b4b6a3eB699647368e7";
 
-describe("Oracle1Balance", () => {
+describe("Briber", () => {
   let gear: IERC20;
   let briber: Briber;
   let automate: IAutomate;

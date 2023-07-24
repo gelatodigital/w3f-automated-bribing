@@ -13,7 +13,7 @@ const main = async () => {
   // create W3F task
   console.log("Creating W3F task.");
 
-  const briberAddress = await deployments.get("Briber");
+  const briber = await deployments.get("Briber");
   const [deployer] = await ethers.getSigners();
   const chainId = await deployer.getChainId();
 
@@ -23,7 +23,7 @@ const main = async () => {
     name: "Automated Bribing",
     web3FunctionHash: cid,
     web3FunctionArgs: {
-      contractAddress: briberAddress.address,
+      contractAddress: briber.address,
     },
     useTreasury: false,
   });
