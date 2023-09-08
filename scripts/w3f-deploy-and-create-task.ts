@@ -1,5 +1,9 @@
-import { AutomateSDK } from "@gelatonetwork/automate-sdk";
 import { deployments, ethers, w3f } from "hardhat";
+import {
+  AutomateSDK,
+  TriggerConfig,
+  TriggerType,
+} from "@gelatonetwork/automate-sdk";
 
 const main = async () => {
   // deploy W3F to IPFS
@@ -19,6 +23,11 @@ const main = async () => {
 
   const automate = new AutomateSDK(chainId, deployer);
 
+  const trigger: TriggerConfig = {
+    type: TriggerType.TIME,
+    interval: 30 * 60 * 1000, // 30 minutes
+  };
+
   const { taskId, tx } = await automate.createBatchExecTask({
     name: "Automated Bribing",
     web3FunctionHash: cid,
@@ -26,6 +35,7 @@ const main = async () => {
       contractAddress: briber.address,
     },
     useTreasury: false,
+    trigger,
   });
 
   await tx.wait();

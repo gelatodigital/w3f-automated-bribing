@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity 0.8.21;
 
 enum Module {
     RESOLVER,
@@ -58,4 +58,8 @@ interface IGelato1Balance {
         address _token,
         uint256 _amount
     ) external;
+}
+
+interface IGelato {
+    function feeCollector() external view returns (address);
 }
