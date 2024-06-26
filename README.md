@@ -2,7 +2,7 @@
 This project demonstrates automated bribing with configurable bribe plans stored on-chain.
 The plans are periodically executed with off-chain data by a Web3 Function when user-defined criteria are met.
 
-> **Warning**  
+> [!WARNING]
 > The documentation has not yet been updated to reflect the most recent release.
 
 ## Creating a bribe plan
@@ -27,7 +27,7 @@ Arguments for the respective functions are the following:
    - Start (Starting timestamp)
    - Epochs (Total number of executions)
   
-> **Note**  
+> [!NOTE]
 > Plans can be scheduled in advance by specifying a starting timestamp out in the future.
   
 Plans are identified by a ``bytes32`` key which is derived by [hashing its attributes](https://github.com/gelatodigital/w3f-automated-bribing/blob/main/contracts/Briber/Briber.sol#L247-L251).  
@@ -63,17 +63,17 @@ Whenever a new plan is added the tokens it requires are allocated to it and are 
 This ensures that multiple plans can coexist and execute in parallel without stealing tokens from one another.
 The contract prevents the creation of plans which have insufficient tokens to run until completion and prevents the withdrawal of tokens in use by existing plans.
 
-> **Note**  
+> [!NOTE]
 > ``addPlanAll`` is inherently safe as its plans bribe all remaining unallocated tokens.
 
 This behaviour can be overridden with ``unsafe=true`` in ``addPlan`` and ``withdrawERC20``
 
-> **Warning**  
+> [!WARNING]
 > Using this override voids the guarantees outlined above and may lead to plan cancellation.
 
 ## Deployment
 
-> **Warning**  
+> [!WARNING]
 > Contracts are not audited by a third-party. Please use at your own discretion.
 
 1. Install dependencies
